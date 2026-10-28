@@ -5,7 +5,7 @@
  *
  * - Live video (webrtc/mse through go2rtc) with call controls
  * - Big centered call + unlock (lock) buttons that stay visible during a call
- * - Ring popup (answer/reject) driven by the call-state sensor
+ * - While ringing: answer / reject / unlock buttons (unlock also stops the indoor ringing)
  * - Call History list with per-ring snapshot thumbnails (click to zoom)
  *
  * Config (data): see README.md
@@ -35,6 +35,8 @@ class HikvisionDoorbellCard extends HTMLElement {
       call_entity: 'sensor.outdoor_call_state',
       door_entity: 'script.hikvision_pulse_door_1',
       answer_script: 'script.hikvision_answer_and_stop_ringing',
+      ringing_entity: 'input_boolean.hikvision_ringing',
+      reject_entity: 'button.outdoor_reject_call',
       relays: ['switch.outdoor_door_1_relay'],
       media_dir: 'outdoor',
       depth: 12
@@ -49,6 +51,7 @@ class HikvisionDoorbellCard extends HTMLElement {
       stream_name: '',
       relays: [],
       ringing_entity: '',
+      reject_entity: '',
       door_entity: '',
       answer_script: '',
       snapshot_prefix: 'porteiro_',
@@ -170,8 +173,11 @@ class HikvisionDoorbellCard extends HTMLElement {
         video.textContent = '';
         this._acc = document.createElement('advanced-camera-card');
         if (this._hass) this._acc.hass = this._hass;
+        // Ring mode: the ringing entity raises an inbound call in ACC and the
+        // call controls become our own state-dependent menu icons.
+        const ringMode = !!cfg.ringing_entity;
         const buttons = {
-          iris: { enabled: false }, call: { enabled: true, icon: 'mdi:video' },
+          iris: { enabled: false }, call: ringMode ? { enabled: false } : { enabled: true, icon: 'mdi:video' },
           mute: { enabled: false }, microphone: { enabled: false },
           snapshots: { enabled: false }, recordings: { enabled: false },
           info: { enabled: false }, camera_ui: { enabled: false }, cameras: { enabled: false },
@@ -183,12 +189,14 @@ class HikvisionDoorbellCard extends HTMLElement {
         };
         const accCfg = {
           type: 'custom:advanced-camera-card',
-          cameras: [{
+          cameras: [Object.assign({
             camera_entity: cfg.camera_entity,
             live_provider: 'go2rtc',
             go2rtc: { modes: ['webrtc', 'mse'], stream: cfg.stream_name },
             title: cfg.title
-          }],
+          }, ringMode ? {
+            triggers: { entities: [cfg.ringing_entity], motion: false, occupancy: false, events: [] }
+          } : {})],
           live: {
             show_image_during_load: true,
             microphone: { auto_unmute: ['call'] },
@@ -210,14 +218,47 @@ class HikvisionDoorbellCard extends HTMLElement {
             actions: [{ action: 'perform-action', perform_action: 'script.turn_on', target: { entity_id: cfg.answer_script } }]
           }];
         }
-        if (cfg.door_entity) {
-          accCfg.elements = [{
-            type: 'custom:advanced-camera-card-menu-icon',
-            icon: 'mdi:lock', priority: 40, permanent: true,
-            style: { color: '#c857e6' }, title: 'Open door',
-            tap_action: { action: 'perform-action', perform_action: 'script.turn_on', target: { entity_id: cfg.door_entity } }
-          }];
+        const run = (entity) => {
+          const domain = entity.split('.')[0];
+          const service = domain === 'button' ? 'button.press' : domain === 'switch' ? 'switch.turn_on' : 'script.turn_on';
+          return { action: 'perform-action', perform_action: service, target: { entity_id: entity } };
+        };
+        const accAction = (a) => ({ action: 'custom:advanced-camera-card-action', advanced_camera_card_action: a });
+        const menuIcon = (icon, color, title, priority, tap) => Object.assign({
+          type: 'custom:advanced-camera-card-menu-icon', icon: icon, priority: priority, permanent: true,
+          title: title, tap_action: tap
+        }, color ? { style: { color: color } } : {});
+        const duringCall = (states, elements) => ({
+          type: 'custom:advanced-camera-card-conditional',
+          conditions: [{ condition: 'call', call: states }], elements: elements
+        });
+        const elements = [];
+        if (ringMode) {
+          // Hang up the outdoor call too, so the indoor stations stop ringing
+          const reject = [accAction('call_end')];
+          if (cfg.reject_entity) reject.unshift(run(cfg.reject_entity));
+          elements.push(
+            duringCall(['idle'], [menuIcon('mdi:video', null, 'Talk', 50, accAction('call_start'))]),
+            duringCall(['ringing'], [
+              menuIcon('mdi:phone', '#43a047', 'Answer', 50, accAction('call_answer')),
+              menuIcon('mdi:phone-hangup', '#e53935', 'Reject', 45, reject)
+            ]),
+            duringCall(['answered'], [menuIcon('mdi:phone-hangup', '#e53935', 'Hang up', 50, accAction('call_end'))])
+          );
         }
+        if (cfg.door_entity) {
+          const lock = (tap) => menuIcon('mdi:lock', '#c857e6', 'Open door', 40, tap);
+          if (ringMode && cfg.answer_script) {
+            // Opening during a ring also silences the indoor stations
+            elements.push(
+              duringCall(['ringing'], [lock([run(cfg.door_entity), run(cfg.answer_script), accAction('call_end')])]),
+              duringCall(['idle', 'answered'], [lock(run(cfg.door_entity))])
+            );
+          } else {
+            elements.push(lock(run(cfg.door_entity)));
+          }
+        }
+        if (elements.length) accCfg.elements = elements;
         this._acc.setConfig(accCfg);
         video.appendChild(this._acc);
       } catch (e) { console.error('hikvision-doorbell-card: ACC error', e); }
@@ -361,4 +402,4 @@ window.customCards.push({
   description: 'Fermax-style doorbell card for Hikvision video intercoms: live video, call controls, unlock, call history with thumbnails.'
 });
 
-console.info('%c hikvision-doorbell-card v1.0.0 ', 'color:#fff;background:#591;padding:1px 3px;border-radius:3px');
+console.info('%c hikvision-doorbell-card v1.1.0 ', 'color:#fff;background:#591;padding:1px 3px;border-radius:3px');

@@ -10,7 +10,7 @@ fully local — no Hik-Connect.
 
 - **Live video** from your Hikvision camera restreamed via **Frigate / go2rtc** (WebRTC, two-way audio).
 - **Big centered buttons** (video call + unlock), kept visible during a call — tap the lock mid-call to pulse the door relay.
-- **Ring popup** with answer/reject driven by the add-on's `*_call_state` sensor; answering starts two-way audio.
+- **Ring controls**: while the doorbell rings, the talk button becomes **Answer** (green) next to **Reject** (red) and the lock. Answering starts two-way audio; reject and unlock end the ring so the indoor stations stop ringing.
 - **Call History** with per-ring **snapshot thumbnails** (click a thumbnail to zoom), answer/missed icons, relative timestamps.
 
 ## Prerequisites
@@ -73,6 +73,7 @@ camera_entity: camera.hikvision_outdoor
 stream_name: hik_outdoor          # go2rtc stream name in Frigate
 call_entity: sensor.outdoor_call_state
 ringing_entity: input_boolean.hikvision_ringing
+reject_entity: button.outdoor_reject_call
 door_entity: script.hikvision_pulse_door_1
 answer_script: script.hikvision_answer_and_stop_ringing
 relays:
@@ -93,9 +94,10 @@ max_width: 470
 | `camera_entity` | **yes** | — | Camera entity (Frigate camera) |
 | `stream_name` | no | — | go2rtc stream name in Frigate (uses WebRTC/MSE) |
 | `call_entity` | **yes** | — | `sensor.*_call_state` from the add-on (`idle`/`ring`/`onCall`) |
-| `ringing_entity` | no | — | Helper kept in sync with the `ring` state |
+| `ringing_entity` | no | — | `on` while ringing (helper kept in sync with the `ring` state). Enables the ring controls |
+| `reject_entity` | no | — | Button pressed by **Reject** (e.g. `button.outdoor_reject_call`) |
 | `door_entity` | no | — | Script that pulses the door relay (magenta lock button) |
-| `answer_script` | no | — | Script run when the call is answered (e.g. silence other monitors) |
+| `answer_script` | no | — | Script run when the call is answered, or the door is opened while ringing (silences other monitors) |
 | `relays` | no | `[]` | Relay switches used to mark a call as answered in history |
 | `media_dir` | no | `outdoor` | Folder under `/media` holding the ring snapshots |
 | `snapshot_prefix` | no | `porteiro_` | Snapshot filename prefix |
