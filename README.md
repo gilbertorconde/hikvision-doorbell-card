@@ -74,6 +74,7 @@ stream_name: hik_outdoor          # go2rtc stream name in Frigate
 call_entity: sensor.outdoor_call_state
 ringing_entity: input_boolean.hikvision_ringing
 reject_entity: button.outdoor_reject_call
+silence_entity: input_boolean.doorbell_silence
 door_entity: script.hikvision_pulse_door_1
 answer_script: script.hikvision_answer_and_stop_ringing
 relays:
@@ -96,6 +97,7 @@ max_width: 470
 | `call_entity` | **yes** | — | `sensor.*_call_state` from the add-on (`idle`/`ring`/`onCall`) |
 | `ringing_entity` | no | — | `on` while ringing (helper kept in sync with the `ring` state). Enables the ring controls |
 | `reject_entity` | no | — | Button pressed by **Reject** (e.g. `button.outdoor_reject_call`) |
+| `silence_entity` | no | — | `input_boolean` toggled by the bell button in the control bar; the caption shows *silenced* while it is `on`. What silencing does is up to your automations |
 | `door_entity` | no | — | Script that pulses the door relay (magenta lock button) |
 | `answer_script` | no | — | Script run when the call is answered, or the door is opened while ringing (silences other monitors) |
 | `relays` | no | `[]` | Relay switches used to mark a call as answered in history |
