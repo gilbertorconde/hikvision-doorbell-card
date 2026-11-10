@@ -7,6 +7,7 @@
  * - Big centered call + unlock (lock) buttons that stay visible during a call
  * - While ringing: answer / reject / unlock buttons (unlock also stops the indoor ringing)
  * - Call History list with per-ring snapshot thumbnails (click to zoom)
+ * - Optional silence toggle (bell button in the control bar) bound to an input_boolean
  *
  * Config (data): see README.md
  */
@@ -37,6 +38,7 @@ class HikvisionDoorbellCard extends HTMLElement {
       answer_script: 'script.hikvision_answer_and_stop_ringing',
       ringing_entity: 'input_boolean.hikvision_ringing',
       reject_entity: 'button.outdoor_reject_call',
+      silence_entity: 'input_boolean.doorbell_silence',
       relays: ['switch.outdoor_door_1_relay'],
       media_dir: 'outdoor',
       depth: 12
@@ -54,6 +56,7 @@ class HikvisionDoorbellCard extends HTMLElement {
       reject_entity: '',
       door_entity: '',
       answer_script: '',
+      silence_entity: '',
       snapshot_prefix: 'porteiro_',
       media_dir: 'outdoor',
       depth: 12,
@@ -70,6 +73,7 @@ class HikvisionDoorbellCard extends HTMLElement {
     if (!this._cfg) return;
     this._hass = hass;
     if (this._acc) this._acc.hass = hass;
+    this._updateCaption();
     const cs = hass.states[this._cfg.call_entity];
     const cur = cs ? cs.state : null;
     if (this._lastCall === null || cur !== this._lastCall) {
@@ -97,6 +101,19 @@ class HikvisionDoorbellCard extends HTMLElement {
     if (this._centerTimer) clearInterval(this._centerTimer);
   }
 
+  _isSilenced() {
+    const id = this._cfg && this._cfg.silence_entity;
+    const st = id && this._hass && this._hass.states[id];
+    return !!st && st.state === 'on';
+  }
+
+  _updateCaption() {
+    if (!this._caption) return;
+    const text = this._cfg.title + ' \u00b7 live' + (this._isSilenced() ? ' \u00b7 silenced' : '');
+    if (this._caption.textContent !== text) this._caption.textContent = text;
+    this._caption.classList.toggle('silenced', this._isSilenced());
+  }
+
   _applySizing() {
     const wrap = this.shadowRoot.querySelector('.wrap');
     if (wrap) wrap.style.maxWidth = this._cfg.max_width + 'px';
@@ -108,6 +125,7 @@ class HikvisionDoorbellCard extends HTMLElement {
       '.wrap { width: 100%; margin: 0 auto; background: #161618; border-radius: 10px; overflow: hidden; position: relative; } ' +
       '.video { background: #111; } ' +
       '.caption { text-align: center; color: #9e9ea3; font-size: 13px; padding: 6px 0 10px; background: #26262a; } ' +
+      '.caption.silenced { color: #ffb300; } ' +
       '.header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 8px; } ' +
       '.header div { color: #9e9ea3; font-size: 14px; font-weight: 600; } ' +
       '.header button { background: none; border: none; color: #9e9ea3; cursor: pointer; font-size: 16px; padding: 2px 6px; } ' +
@@ -141,6 +159,7 @@ class HikvisionDoorbellCard extends HTMLElement {
     const caption = document.createElement('div');
     caption.className = 'caption';
     caption.textContent = cfg.title + ' \u00b7 live';
+    this._caption = caption;
 
     const header = document.createElement('div');
     header.className = 'header';
@@ -257,6 +276,18 @@ class HikvisionDoorbellCard extends HTMLElement {
           } else {
             elements.push(lock(run(cfg.door_entity)));
           }
+        }
+        if (cfg.silence_entity) {
+          // Bell toggle: amber bell-off while silenced, grey bell otherwise
+          const toggle = { action: 'perform-action', perform_action: 'homeassistant.toggle', target: { entity_id: cfg.silence_entity } };
+          const whenSilence = (state, elems) => ({
+            type: 'custom:advanced-camera-card-conditional',
+            conditions: [{ condition: 'state', entity: cfg.silence_entity, state: state }], elements: elems
+          });
+          elements.push(
+            whenSilence('on', [menuIcon('mdi:bell-off', '#ffb300', 'Silenced \u2013 tap to unmute', 30, toggle)]),
+            whenSilence('off', [menuIcon('mdi:bell-outline', null, 'Silence doorbell', 30, toggle)])
+          );
         }
         if (elements.length) accCfg.elements = elements;
         this._acc.setConfig(accCfg);
@@ -402,4 +433,4 @@ window.customCards.push({
   description: 'Fermax-style doorbell card for Hikvision video intercoms: live video, call controls, unlock, call history with thumbnails.'
 });
 
-console.info('%c hikvision-doorbell-card v1.1.2 ', 'color:#fff;background:#591;padding:1px 3px;border-radius:3px');
+console.info('%c hikvision-doorbell-card v1.2.0 ', 'color:#fff;background:#591;padding:1px 3px;border-radius:3px');
