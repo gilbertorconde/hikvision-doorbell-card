@@ -402,4 +402,4 @@ window.customCards.push({
   description: 'Fermax-style doorbell card for Hikvision video intercoms: live video, call controls, unlock, call history with thumbnails.'
 });
 
-console.info('%c hikvision-doorbell-card v1.1.1 ', 'color:#fff;background:#591;padding:1px 3px;border-radius:3px');
+console.info('%c hikvision-doorbell-card v1.1.2 ', 'color:#fff;background:#591;padding:1px 3px;border-radius:3px');
