@@ -1,5 +1,4 @@
 {
   "name": "Hikvision Doorbell Card",
-  "render_readme": true,
-  "homeassistant": null
+  "render_readme": true
 }
